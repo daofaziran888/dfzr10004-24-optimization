@@ -5,14 +5,26 @@
 """
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.routers import ROUTERS
+from app.services.report_engine import reconcile_interrupted_jobs
 from app.store import store
 
-app = FastAPI(title="智能采集质量管控平台", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 启动即对账：上次进程退出时停在「生成中」的任务改为「已中断」，
+    # 避免重新打开报表时状态永远停在生成中；任务可从失败段手动恢复。
+    reconcile_interrupted_jobs()
+    yield
+
+
+app = FastAPI(title="智能采集质量管控平台", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

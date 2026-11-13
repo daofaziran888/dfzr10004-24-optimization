@@ -1,4 +1,4 @@
-"""采集审计日志接口：维护审计记录，覆盖标记复核、归档记录等动作。"""
+"""采集审计日志接口：维护审计记录、待复核清单，覆盖标记复核、归档记录等动作。"""
 from __future__ import annotations
 
 from typing import Any
@@ -13,13 +13,13 @@ router = APIRouter(prefix="/api/audit", tags=["采集审计日志"])
 service = AuditService()
 
 LIST_FIELDS = ["记录编号", "操作类型", "采集计划", "执行人", "执行时间", "结果摘要", "变更内容", "复核状态"]
-STATUSES = ["已记录", "已复核", "已归档"]
+STATUSES = ["待复核", "已记录", "已复核", "已归档"]
 
 
 @router.get("", response_model=PageResult[dict])
 def list_entries(
     keyword: str | None = Query(default=None, description="按记录编号检索"),
-    status: str | None = Query(default=None, description="已记录、已复核、已归档"),
+    status: str | None = Query(default=None, description="待复核、已记录、已复核、已归档"),
     page: int = 1,
     size: int = 20,
 ) -> PageResult[dict]:
@@ -27,6 +27,19 @@ def list_entries(
     if size > 200:
         raise HTTPException(status_code=400, detail="每页最多 200 条，请缩小分页范围")
     items, total = service.list_entries(keyword=keyword, status=status, page=page, size=size)
+    return PageResult(items=items, total=total, page=page, size=size)
+
+
+@router.get("/pending-review", response_model=PageResult[dict])
+def pending_review(
+    keyword: str | None = Query(default=None, description="按记录编号或关联报表检索"),
+    page: int = 1,
+    size: int = 20,
+) -> PageResult[dict]:
+    """采集审计台账待复核清单：报表生成结果同步后默认进入这里。"""
+    if size > 200:
+        raise HTTPException(status_code=400, detail="每页最多 200 条，请缩小分页范围")
+    items, total = service.pending_review(keyword=keyword, page=page, size=size)
     return PageResult(items=items, total=total, page=page, size=size)
 
 

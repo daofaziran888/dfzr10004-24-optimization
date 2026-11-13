@@ -72,6 +72,37 @@ npm run dev
   `backend/app/routers/<模块>.py`，业务规则在 `backend/app/services/<模块>.py`。
 - 列表接口统一返回 `{ items, total, page, size }`，动作接口统一返回 `{ ok, message }`。
 - 状态流转只允许在 `app/services` 里改，路由层不做业务判断。
+- 业务数据持久化在 `backend/data/`（`state.json` 与 `datasource.json`，原子写入），
+  可用环境变量 `APP_DATA_DIR` 改目录；该目录已在 `.gitignore` 中忽略。
+
+## 报表分段生成与断点恢复
+
+采集统计报表数据量增大后，生成不再整批重算，而是按「统计周期 + 报表编号」拆成
+生成段、按批次执行：
+
+- 生成段是计算/重试/恢复的最小单位；每 `REPORT_BATCH_SIZE`（默认 4）个段为一个
+  批次，批次内并发上限 `REPORT_CONCURRENCY`（默认 2），单段最多重试
+  `SEGMENT_MAX_RETRIES`（默认 3）次；每个报表保留最近 `REPORT_VERSION_KEEP`
+  （默认 3）个非归档版本，归档版本永久保留。均可用环境变量覆盖。
+- 生成段状态、当前批次、重试次数、诊断码（`E_INTERRUPTED` / `E_SEGMENT_FAILED`
+  / `E_ARCHIVED` 等）与开始时的快照全部落盘；进程重启时 `main.py` 的 lifespan
+  会把停在「生成中」的任务对账为「已中断」，重新打开页面看到的是可恢复的真实状态。
+- 中断后调用 `POST /api/report/jobs/{job_id}/resume` 从失败段恢复，已完成段直接
+  跳过，不重复计算；同一报表同时只保留一个有效执行，重复触发复用既有任务。
+- 任务开始即冻结采集明细快照，之后新到达的数据不会改写正在生成的报表，冲突时以
+  开始时的快照为准；归档后的报表拒绝任何重试覆盖。
+- 生成完成后结果自动同步到采集审计台账（`GET /api/audit/pending-review`
+  待复核清单），携带生成批次、重试次数、诊断码与来源说明；采集计划清单保留
+  「来源说明」字段用于来源回溯。
+- 排障演练可用 `POST /api/report/debug/faults` 注入/清除单段计算故障
+  （仅进程内生效、不落盘，重启自动清除）。
+
+### 后端测试
+
+```bash
+cd backend
+.venv/bin/python -m unittest discover -s tests
+```
 
 领域：数据工程
 子方向：数据采集、爬虫与RPA

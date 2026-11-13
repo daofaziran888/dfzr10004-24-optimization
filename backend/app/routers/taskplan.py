@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/taskplan", tags=["采集任务编排"])
 
 service = TaskplanService()
 
-LIST_FIELDS = ["计划编号", "目标站点", "采集频率", "数据范围", "优先级", "资源配额", "预计用时", "计划状态"]
+LIST_FIELDS = ["计划编号", "目标站点", "采集频率", "数据范围", "优先级", "资源配额", "预计用时", "计划状态", "来源说明"]
 STATUSES = ["草稿", "运行中", "已暂停", "已完成"]
 
 
